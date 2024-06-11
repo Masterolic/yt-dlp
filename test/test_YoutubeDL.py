@@ -140,6 +140,8 @@ class TestFormatSelection(unittest.TestCase):
         test('example-with-dashes', 'example-with-dashes')
         test('all', '2', '47', '45', 'example-with-dashes', '35')
         test('mergeall', '2+47+45+example-with-dashes+35', multi=True)
+        # See: https://github.com/yt-dlp/yt-dlp/pulls/8797
+        test('7_a/worst', '35')
 
     def test_format_selection_audio(self):
         formats = [
@@ -181,7 +183,7 @@ class TestFormatSelection(unittest.TestCase):
         ]
 
         info_dict = _make_result(formats)
-        ydl = YDL({'format': 'best'})
+        ydl = YDL({'format': 'best', 'format_sort': ['abr', 'ext']})
         ydl.sort_formats(info_dict)
         ydl.process_ie_result(copy.deepcopy(info_dict))
         downloaded = ydl.downloaded_info_dicts[0]
@@ -193,7 +195,7 @@ class TestFormatSelection(unittest.TestCase):
         downloaded = ydl.downloaded_info_dicts[0]
         self.assertEqual(downloaded['format_id'], 'mp3-64')
 
-        ydl = YDL({'prefer_free_formats': True})
+        ydl = YDL({'prefer_free_formats': True, 'format_sort': ['abr', 'ext']})
         ydl.sort_formats(info_dict)
         ydl.process_ie_result(copy.deepcopy(info_dict))
         downloaded = ydl.downloaded_info_dicts[0]
@@ -632,7 +634,6 @@ class TestYoutubeDL(unittest.TestCase):
 
     outtmpl_info = {
         'id': '1234',
-        'id': '1234',
         'ext': 'mp4',
         'width': None,
         'height': 1080,
@@ -729,7 +730,7 @@ class TestYoutubeDL(unittest.TestCase):
                 self.assertEqual(got_dict.get(info_field), expected, info_field)
             return True
 
-        test('%()j', (expect_same_infodict, str))
+        test('%()j', (expect_same_infodict, None))
 
         # NA placeholder
         NA_TEST_OUTTMPL = '%(uploader_date)s-%(width)d-%(x|def)s-%(id)s.%(ext)s'
@@ -785,9 +786,9 @@ class TestYoutubeDL(unittest.TestCase):
         test('%(title4)#S', 'foo_bar_test')
         test('%(title4).10S', ('foo ＂bar＂ ', 'foo ＂bar＂' + ('#' if compat_os_name == 'nt' else ' ')))
         if compat_os_name == 'nt':
-            test('%(title4)q', ('"foo \\"bar\\" test"', "＂foo ⧹＂bar⧹＂ test＂"))
-            test('%(formats.:.id)#q', ('"id 1" "id 2" "id 3"', '＂id 1＂ ＂id 2＂ ＂id 3＂'))
-            test('%(formats.0.id)#q', ('"id 1"', '＂id 1＂'))
+            test('%(title4)q', ('"foo ""bar"" test"', None))
+            test('%(formats.:.id)#q', ('"id 1" "id 2" "id 3"', None))
+            test('%(formats.0.id)#q', ('"id 1"', None))
         else:
             test('%(title4)q', ('\'foo "bar" test\'', '\'foo ＂bar＂ test\''))
             test('%(formats.:.id)#q', "'id 1' 'id 2' 'id 3'")
@@ -798,6 +799,7 @@ class TestYoutubeDL(unittest.TestCase):
         test('%(title|%)s %(title|%%)s', '% %%')
         test('%(id+1-height+3)05d', '00158')
         test('%(width+100)05d', 'NA')
+        test('%(filesize*8)d', '8192')
         test('%(formats.0) 15s', ('% 15s' % FORMATS[0], None))
         test('%(formats.0)r', (repr(FORMATS[0]), None))
         test('%(height.0)03d', '001')
@@ -939,7 +941,7 @@ class TestYoutubeDL(unittest.TestCase):
         def get_videos(filter_=None):
             ydl = YDL({'match_filter': filter_, 'simulate': True})
             for v in videos:
-                ydl.process_ie_result(v, download=True)
+                ydl.process_ie_result(v.copy(), download=True)
             return [v['id'] for v in ydl.downloaded_info_dicts]
 
         res = get_videos()
